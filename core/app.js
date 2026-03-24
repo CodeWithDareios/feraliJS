@@ -12,11 +12,9 @@ export function createApp(rootID) {
   const plugins = [];
 
   const app = {
+    cssFiles: [],
     useCss(link) {
-      const linkElement = document.createElement('link');
-      linkElement.rel = 'stylesheet';
-      linkElement.href = link;
-      document.head.appendChild(linkElement);
+      this.cssFiles.push(link);
       return this;
     },
     use(plugin) {
@@ -29,6 +27,18 @@ export function createApp(rootID) {
     async mount(Component) {
       if (!root)
         throw new Error(`Root element with ID: "${rootID}" not found!`);
+
+      const cssPromises = this.cssFiles.map(file => {
+          return new Promise(resolve => {
+              const link = document.createElement("link");
+              link.rel = "stylesheet";
+              link.href = file;
+              link.onload = resolve;
+              link.onerror = resolve;
+              document.head.appendChild(link);
+          });
+      });
+      await Promise.all(cssPromises);
 
       await Component.build();
       const dom = Component.getCurrentDOM();

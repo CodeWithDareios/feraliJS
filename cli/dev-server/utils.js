@@ -51,8 +51,12 @@ export function safeJoinPath(baseDir, requestedPath) {
     
     const absoluteRequested = path.resolve(absoluteBase, cleanPath.replace(/^\//, ''));
     
+    // Windows path casing normalization
+    const baseLower = absoluteBase.toLowerCase();
+    const requestedLower = absoluteRequested.toLowerCase();
+
     // Check if the resulting path still starts with the base directory
-    if (absoluteRequested.startsWith(absoluteBase)) {
+    if (requestedLower.startsWith(baseLower)) {
         return absoluteRequested;
     }
     

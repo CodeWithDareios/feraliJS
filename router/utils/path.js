@@ -1,5 +1,13 @@
-export function pathToRegex(path) {
-    return new RegExp("^" + path.replace(/\//g, "\\/").replace(/:\w+/g, "(.+)") + "$");
+export function pathToRegex(path, partial = false) {
+    // Ensure path starts with a slash for regex generation
+    const normalizedPath = path.startsWith('/') ? path : '/' + path;
+    
+    let pattern = normalizedPath
+        .replace(/\//g, "\\/")
+        .replace(/:\w+/g, "(.+)")
+        .replace(/\*/g, "(.*)");
+    
+    return new RegExp("^" + pattern + (partial ? "" : "$"));
 }
 
 export function getParams(match) {

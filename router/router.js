@@ -1,14 +1,13 @@
 import { initNavigation, navigateTo } from './core/navigation.js';
 import { RouterState } from './core/state.js';
+import './components/Outlet.js';
+import './components/Link.js';
 
 export function createRouter(routes) {
     RouterState.routes = routes;
 
     return {
         install(app) {
-            import('./components/Outlet.js');
-            import('./components/Link.js');
-
             initNavigation();
         }
     };

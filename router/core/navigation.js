@@ -29,8 +29,6 @@ function handleLocationChange() {
     RouterState.params = params;
     RouterState.query = Object.fromEntries(new URLSearchParams(window.location.search));
 
-    // Notify all active <router-outlet> elements to update
-    document.querySelectorAll('router-outlet').forEach(outlet => {
-        if (outlet.update) outlet.update();
-    });
+    // Notify all outlets via a custom event (more robust than querySelectorAll)
+    window.dispatchEvent(new CustomEvent('ferali-nav'));
 }

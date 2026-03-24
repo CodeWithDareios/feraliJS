@@ -67,11 +67,15 @@ export default class Component {
         let count = STYLESHEET_REGISTRY.get(path) || 0;
         
         if (count === 0) {
-          const link = document.createElement('link');
-          link.rel = 'stylesheet';
-          link.href = path;
-          link.dataset.feraliStyle = path; // Custom attribute to track it
-          document.head.appendChild(link);
+          await new Promise((resolve) => {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = path;
+            link.dataset.feraliStyle = path; // Custom attribute to track it
+            link.onload = resolve;
+            link.onerror = resolve;
+            document.head.appendChild(link);
+          });
         }
         
         STYLESHEET_REGISTRY.set(path, count + 1);

@@ -49,6 +49,7 @@ function broadcastReload(filename) {
  * Using recursive: true for Windows.
  */
 let reloadTimeout = null;
+const mtimeCache = new Map();
 
 export function setupWatcher(rootDir) {
     const dirsToWatch = ['src', 'public', 'index.html'];
@@ -61,6 +62,17 @@ export function setupWatcher(rootDir) {
             
             fs.watch(targetPath, { recursive: isDirectory }, (eventType, filename) => {
                 if (filename) {
+                    const fullPath = path.join(isDirectory ? targetPath : rootDir, filename);
+                    
+                    try {
+                        // Check if file was ACTUALLY modified (prevents Windows firing on read access)
+                        const stat = fs.statSync(fullPath);
+                        if (mtimeCache.get(fullPath) === stat.mtimeMs) return;
+                        mtimeCache.set(fullPath, stat.mtimeMs);
+                    } catch (e) {
+                        // Ignore stat errors (like file deletions), just let it reload
+                    }
+
                     if (reloadTimeout) clearTimeout(reloadTimeout);
                     reloadTimeout = setTimeout(() => {
                         broadcastReload(filename);
