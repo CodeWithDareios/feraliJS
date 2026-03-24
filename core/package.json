@@ -1,0 +1,10 @@
+{
+  "name": "ferali",
+  "version": "0.1.0",
+  "main": "core.js",
+  "type": "module",
+  "exports": {
+    ".": "./core.js",
+    "./hooks": "./hooks/hooks.js"
+  }
+}

@@ -5,6 +5,7 @@ export async function buildNode(child) {
 
   if (typeof child.children == 'string') {
     child.ell = document.createTextNode(child.children);
+    return;
   } else {
     if (child.isComponent) {
       child.component.useProps(child.props);

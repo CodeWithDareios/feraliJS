@@ -15,8 +15,16 @@ export function parseElement(scanner) {
   }
   scanner.consume(1); // Consume '>'
 
-  const children = parseNodes(scanner, `</${tag}>`); // Recursively parse children
-  scanner.consumeUntil('>'); // Clear out the rest of the closing tag
+  const voidElements = [
+    'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+    'link', 'meta', 'param', 'source', 'track', 'wbr'
+  ];
+
+  let children = [];
+  if (!voidElements.includes(tag.toLowerCase())) {
+    children = parseNodes(scanner, `</${tag}>`); // Recursively parse children
+    scanner.consumeUntil('>'); // Clear out the rest of the closing tag
+  }
 
   return {
     type: 'element',

@@ -13,8 +13,8 @@ export const miniHash = (input) => {
     hash2 |= 0;
   }
 
-  const part1 = Math.abs(hash1.toString(36).padStart(10, '0'));
-  const part2 = Math.abs(hash2.toString(36).padStart(10, '0'));
+  const part1 = hash1.toString(36);
+  const part2 = hash2.toString(36);
 
   return part1 + part2;
 };
