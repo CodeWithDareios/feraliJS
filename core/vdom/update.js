@@ -1,8 +1,23 @@
+/**
+ * @fileoverview The VDOM diffing and reconciliation engine.
+ * `UPDATE_DOM` diffs two VNode trees and makes the minimal set of real DOM
+ * mutations to bring the actual DOM in sync with the new tree.
+ */
+
 import { buildNode } from './fullBuild.js';
 import { DESTROY_DOM } from './destroy.js';
 import { propDiff } from './propDiff.js';
 
+/**
+ * Recursively diffs an old VNode against a new VNode and patches the real DOM.
+ *
+ * @param {import('../node/vnode.js').VNode|null} oldNode - The previous VNode (may be null for insertions).
+ * @param {import('../node/vnode.js').VNode|null} newNode - The next VNode (may be null for removals).
+ * @param {HTMLElement} parentDOM - The real DOM parent element to apply mutations to.
+ * @returns {Promise<void>}
+ */
 export async function UPDATE_DOM(oldNode, newNode, parentDOM) {
+  // Insertion
   if (!oldNode) {
     if (newNode) {
       await buildNode(newNode);
@@ -10,19 +25,21 @@ export async function UPDATE_DOM(oldNode, newNode, parentDOM) {
     }
     return;
   }
+
+  // Removal
   if (!newNode) {
-    if (oldNode.isComponent) {
-      parentDOM.removeChild(oldNode.component.getCurrentDOM().ell);
-    } else {
-      parentDOM.removeChild(oldNode.ell);
-    }
+    parentDOM.removeChild(oldNode.isComponent ? oldNode.component.getCurrentDOM().ell : oldNode.ell);
     await DESTROY_DOM(oldNode);
     return;
   }
 
-  // Component Diffing
+  // Component diffing
   if (oldNode.isComponent || newNode.isComponent) {
-    if (oldNode.isComponent && newNode.isComponent && oldNode.component.getConfig() === newNode.component.getConfig()) {
+    if (
+      oldNode.isComponent &&
+      newNode.isComponent &&
+      oldNode.component.getConfig() === newNode.component.getConfig()
+    ) {
       await propDiff(oldNode.component, newNode.props);
       newNode.component = oldNode.component;
       newNode.ell = oldNode.ell;
@@ -36,7 +53,7 @@ export async function UPDATE_DOM(oldNode, newNode, parentDOM) {
     return;
   }
 
-  // Text Diffing
+  // Text node diffing
   if (typeof oldNode.children === 'string' || typeof newNode.children === 'string') {
     if (typeof oldNode.children === 'string' && typeof newNode.children === 'string') {
       if (oldNode.children !== newNode.children) {
@@ -51,7 +68,7 @@ export async function UPDATE_DOM(oldNode, newNode, parentDOM) {
     return;
   }
 
-  // Element Diffing
+  // Element type changed — full replacement
   if (oldNode.tag !== newNode.tag) {
     await buildNode(newNode);
     parentDOM.replaceChild(newNode.ell, oldNode.ell);
@@ -59,23 +76,21 @@ export async function UPDATE_DOM(oldNode, newNode, parentDOM) {
     return;
   }
 
-  // Same tag, update props
+  // Same tag — patch props in place
   newNode.ell = oldNode.ell;
   const oldProps = oldNode.props || {};
   const newProps = newNode.props || {};
-  
-  // Remove missing
+
   for (const key in oldProps) {
     if (!(key in newProps)) {
       if (key.startsWith('on')) {
-        const eventName = key.slice(2).toLowerCase();
-        newNode.ell.removeEventListener(eventName, oldProps[key]);
+        newNode.ell.removeEventListener(key.slice(2).toLowerCase(), oldProps[key]);
       } else {
         newNode.ell.removeAttribute(key);
       }
     }
   }
-  // Add/Update new
+
   for (const key in newProps) {
     if (oldProps[key] !== newProps[key]) {
       if (key.startsWith('on')) {
@@ -88,10 +103,11 @@ export async function UPDATE_DOM(oldNode, newNode, parentDOM) {
     }
   }
 
-  // Diff children (keyed diffing!)
+  // Keyed children diffing
   const oldChildren = oldNode.children || [];
   const newChildren = newNode.children || [];
-  
+  const parentForChildren = newNode.ell;
+
   const oldKeyMap = new Map();
   oldChildren.forEach((child, i) => {
     if (!child) return;
@@ -99,15 +115,13 @@ export async function UPDATE_DOM(oldNode, newNode, parentDOM) {
     oldKeyMap.set(key, child);
   });
 
-  const parentForChildren = newNode.ell;
-  
   for (let i = 0; i < newChildren.length; i++) {
     const newChild = newChildren[i];
     if (!newChild) continue;
-    
+
     const key = (newChild.props && newChild.props.key !== undefined) ? newChild.props.key : i;
     const oldChild = oldKeyMap.get(key);
-    
+
     if (oldChild) {
       oldKeyMap.delete(key);
       await UPDATE_DOM(oldChild, newChild, parentForChildren);
@@ -122,8 +136,8 @@ export async function UPDATE_DOM(oldNode, newNode, parentDOM) {
     }
   }
 
-  // Remove leftovers
-  for (const [key, oldChild] of oldKeyMap) {
+  // Remove any old children not present in new tree
+  for (const [, oldChild] of oldKeyMap) {
     const domNode = oldChild.isComponent ? oldChild.component.getCurrentDOM().ell : oldChild.ell;
     if (domNode && domNode.parentNode === parentForChildren) {
       parentForChildren.removeChild(domNode);

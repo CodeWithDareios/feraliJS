@@ -1,74 +1,77 @@
+/**
+ * @fileoverview The `<router-outlet>` custom element — the rendering viewport for the Ferali Router.
+ * Each outlet renders the matched component for its specific depth in the route branch.
+ * Nested outlets (depth 1+) render child routes inside parent route layouts.
+ */
+
 import { RouterState } from '../core/state.js';
-import { UPDATE_DOM } from '/@ferali/vdom/update.js';
 
 class RouterOutlet extends HTMLElement {
-    #currentComponent = null;
-    #depth = 0;
+  /** @type {import('../../core/component/component.js').default|null} */
+  #currentComponent = null;
 
-    connectedCallback() {
-        // Determine depth based on parent outlets
-        let parent = this.parentElement;
-        while (parent) {
-            if (parent.tagName === 'ROUTER-OUTLET') this.#depth++;
-            parent = parent.parentElement;
-        }
+  /** @type {number} Depth index in the matched route branch (0 = root, 1 = nested, etc.) */
+  #depth = 0;
 
-        this._onNav = () => this.update();
-        window.addEventListener('ferali-nav', this._onNav);
-        this.update();
+  connectedCallback() {
+    let parent = this.parentElement;
+    while (parent) {
+      if (parent.tagName === 'ROUTER-OUTLET') this.#depth++;
+      parent = parent.parentElement;
     }
 
-    disconnectedCallback() {
-        window.removeEventListener('ferali-nav', this._onNav);
+    this._onNav = () => this.update();
+    window.addEventListener('ferali-nav', this._onNav);
+    this.update();
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener('ferali-nav', this._onNav);
+  }
+
+  /**
+   * Resolves and renders the matched route component for this outlet's depth.
+   * On navigation, if the component changes, destroys the old one and mounts the new one.
+   * If the same component is re-used (same route, new params), triggers a props-based update.
+   * @returns {Promise<void>}
+   */
+  async update() {
+    const matched = RouterState.currentBranch[this.#depth];
+
+    if (!matched) {
+      setTimeout(() => {
+        if (this.isConnected) {
+          this.innerHTML = '';
+          this.#currentComponent = null;
+        }
+      }, 0);
+      return;
     }
 
-    async update() {
-        const matched = RouterState.currentBranch[this.#depth];
-        if (!matched) {
-            // Delay clearing briefly to allow parent outlets to destroy this outlet completely
-            // if we are navigating away from deeply nested routes. This prevents visual cascading.
-            setTimeout(() => {
-                if (this.isConnected) {
-                    this.innerHTML = '';
-                    this.#currentComponent = null;
-                }
-            }, 0);
-            return;
-        }
+    const module = await matched.component();
+    const ComponentDef = module.default || module;
+    const currentParams = { ...RouterState.params, ...RouterState.query };
 
-        // Lazy load the component module
-        const module = await matched.component();
-        // Assuming default export is the component definition
-        const ComponentDef = module.default || module;
+    if (this.#currentComponent === ComponentDef) {
+      this.#currentComponent.useProps(currentParams);
+      await this.#currentComponent.update();
+    } else {
+      if (this.#currentComponent) {
+        await this.#currentComponent.destroy();
+      }
 
-        const currentParams = { ...RouterState.params, ...RouterState.query };
-        
-        if (this.#currentComponent === ComponentDef) {
-            // Same component, just trigger Ferali update with new props
-            this.#currentComponent.useProps(currentParams);
-            await this.#currentComponent.update();
-        } else {
-            // New component or initial mount
-            if (this.#currentComponent) {
-                await this.#currentComponent.destroy();
-            }
-            
-            // NOTE: We are using the definition as an instance. 
-            // If the framework is designed to return a new object from defineComponent, this is fine.
-            this.#currentComponent = ComponentDef; 
-            this.#currentComponent.useProps(currentParams);
-            
-            // Critical Change: Ensure we reset the component's internal DOM state before rebuilding
-            // so it doesn't try to reuse a DOM node that's already elsewhere
-            if (this.#currentComponent.getCurrentDOM()) {
-                 this.#currentComponent.setNewDOM(null);
-            }
-            
-            await this.#currentComponent.build();
-            this.innerHTML = '';
-            this.appendChild(this.#currentComponent.getCurrentDOM().ell);
-        }
+      this.#currentComponent = ComponentDef;
+      this.#currentComponent.useProps(currentParams);
+
+      if (this.#currentComponent.getCurrentDOM()) {
+        this.#currentComponent.setNewDOM(null);
+      }
+
+      await this.#currentComponent.build();
+      this.innerHTML = '';
+      this.appendChild(this.#currentComponent.getCurrentDOM().ell);
     }
+  }
 }
 
 customElements.define('router-outlet', RouterOutlet);

@@ -41,6 +41,13 @@ export async function buildNode(child) {
 export async function BUILD_DOM(blueprint, propsContext = {}) {
   const result = blueprint(propsContext);
 
+  // Tag the root element with the unique instance ID
+  const { currentComponent } = await import('../hooks/storage.js');
+  if (currentComponent.component) {
+    result.props = result.props || {};
+    result.props['ferali-id'] = currentComponent.component.instanceID;
+  }
+
   if (ISDEV) devInfo['build-process'].startTime = performance.now();
 
   await buildNode(result);

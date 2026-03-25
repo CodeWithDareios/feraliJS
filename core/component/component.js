@@ -1,3 +1,9 @@
+/**
+ * @fileoverview The `Component` class — the core runtime object for every Ferali component.
+ * Manages the component lifecycle (build, update, destroy), reactive props,
+ * hook state storage, and automatic CSS injection/removal.
+ */
+
 import { COMPONENT } from '../node/identity.js';
 import { randomString, miniHash, cloneObject } from '../utils/utils.js';
 import { currentComponent as CURRENT_COMPONENT, STORAGE } from '../hooks/storage.js';
@@ -16,22 +22,40 @@ const randomSelector = () => {
   return selector;
 };
 
-// Global registry for tracking active stylesheets
+/** Reference-counted registry for dynamically injected stylesheets. */
 const STYLESHEET_REGISTRY = new Map();
 
+/**
+ * The Ferali component runtime class. Instances are created by `defineComponent`.
+ * Handles the full lifecycle from build to destruction.
+ */
 export default class Component {
   #lifeCycle = {};
 
+  /**
+   * @param {{ render: Function, style?: { path: string } }} config - The component configuration.
+   */
   constructor(config) {
-
     this.render = config.render;
     this.instanceID = null;
 
+    // Normalize style configuration
+    if (typeof config.style === 'string') {
+      config.style = { path: config.style, localized: false };
+    } else if (config.style && !config.style.path) {
+      config.style = null; // Invalid style object
+    }
+
     let props = {};
-    this.useProps = (properities) => {
-      props =
-        Object.keys(properities).length == 0 ? {} : cloneObject(properities);
+    /**
+     * Sets the current props for this component instance. Called by the router and
+     * parent components before `build()` or `update()`.
+     * @param {Object} properties - The new props object.
+     */
+    this.useProps = (properties) => {
+      props = Object.keys(properties).length === 0 ? {} : cloneObject(properties);
     };
+    /** @returns {Object} The current props. */
     this.getProps = () => props;
 
     const INFO_DATA = Object.freeze({
@@ -39,107 +63,155 @@ export default class Component {
       __identity: COMPONENT,
       __componentID: miniHash(config),
     });
+    /** @returns {{ __isComponent: boolean, __identity: symbol, __componentID: number }} Frozen component metadata. */
     this.INFO = () => INFO_DATA;
+    /** @returns {Object} The original config passed to `defineComponent`. */
     this.getConfig = () => config;
 
     let currentDOM = null;
+    /** @returns {import('../node/vnode.js').VNode|null} The current live VNode tree. */
     this.getCurrentDOM = () => currentDOM;
-    this.setNewDOM = (DOM) => {
-      currentDOM = DOM;
-    };
+    /**
+     * Replaces the stored VNode reference. Used internally after build/update.
+     * @param {import('../node/vnode.js').VNode|null} DOM
+     */
+    this.setNewDOM = (DOM) => { currentDOM = DOM; };
 
     let bluePrint = null;
     this.defineBluePrint = () => {
       if (bluePrint === null) bluePrint = config.render.call(this);
     };
+    /** @returns {Function|null} The compiled blueprint function. */
     this.accessBluePrint = () => bluePrint;
   }
+
+  /**
+   * Builds the component for the first time: injects CSS, runs the render function,
+   * and constructs the real DOM. No-op if already built.
+   * @returns {Promise<void>}
+   */
   async build() {
-    if (this.getCurrentDOM() === null) {
-      const START = performance.now()
-      this.instanceID = randomSelector();
-      CURRENT_COMPONENT.component = this;
+    if (this.getCurrentDOM() !== null) return;
 
-      // Handle Stylesheet Injection
-      const config = this.getConfig();
-      if (config.style && config.style.path) {
-        const path = config.style.path;
-        let count = STYLESHEET_REGISTRY.get(path) || 0;
-        
-        if (count === 0) {
-          await new Promise((resolve) => {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = path;
-            link.dataset.feraliStyle = path; // Custom attribute to track it
-            link.onload = resolve;
-            link.onerror = resolve;
-            document.head.appendChild(link);
-          });
-        }
-        
-        STYLESHEET_REGISTRY.set(path, count + 1);
+    const START = performance.now();
+    this.instanceID = randomSelector();
+    CURRENT_COMPONENT.component = this;
+
+    const config = this.getConfig();
+    const cid = this.INFO().__componentID;
+    if (config.style && config.style.path) {
+      const path = config.style.path;
+      // Use componentID (cid) for CSS scoping so all instances share one stylesheet
+      const href = config.style.localized
+        ? `${path}?localized=true&ferali-cid=${cid}`
+        : path;
+
+      let count = STYLESHEET_REGISTRY.get(href) || 0;
+      if (count === 0) {
+        await new Promise((resolve) => {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = href;
+          link.dataset.feraliStyle = href;
+          link.onload = resolve;
+          link.onerror = resolve;
+          document.head.appendChild(link);
+        });
       }
-
-      await this.defineBluePrint();
-      if (ISDEV) {
-        const DATA_DEV_START = START;
-        const endTime = performance.now();
-
-        const compilationTime = endTime - DATA_DEV_START;
-        devInfo['build-process'].startTime = DATA_DEV_START;
-        devInfo['build-process'].compilationTime = compilationTime;
-      }
-      const computedDOM = await BUILD_DOM(this.accessBluePrint(), this.getProps());
-      this.setNewDOM(computedDOM);
-      if (ISDEV) devInfo['build-process'].buildTime = performance.now() - devInfo['build-process'].startTime
-      CURRENT_COMPONENT.component = null;
+      STYLESHEET_REGISTRY.set(href, count + 1);
     }
+
+    // Reset hook index for the upcoming render
+    if (STORAGE.STATE.has(this.instanceID)) {
+      STORAGE.STATE.get(this.instanceID).hookIndex = 0;
+    }
+
+    await this.defineBluePrint();
+
+    if (ISDEV) {
+      const endTime = performance.now();
+      devInfo['build-process'].startTime = START;
+      devInfo['build-process'].compilationTime = endTime - START;
+    }
+
+    const computedDOM = await BUILD_DOM(this.accessBluePrint(), this.getProps());
+    this.setNewDOM(computedDOM);
+
+    if (ISDEV) devInfo['build-process'].buildTime = performance.now() - devInfo['build-process'].startTime;
+    CURRENT_COMPONENT.component = null;
   }
 
+  /** @returns {Readonly<Object>} Lifecycle metadata. */
   get lifeCycleInfo() {
     return Object.freeze({ ...this.#lifeCycle });
   }
 
+  /**
+   * Re-renders the component in place using the VDOM diffing engine.
+   * No-op if the component has not been built yet.
+   * @returns {Promise<void>}
+   */
   async update() {
     if (this.getCurrentDOM() !== null && !this.isUpdating) {
       this.isUpdating = true;
+
+      // Set context for hooks and hyperscript scoping
+      CURRENT_COMPONENT.component = this;
+      if (STORAGE.STATE.has(this.instanceID)) {
+        STORAGE.STATE.get(this.instanceID).hookIndex = 0;
+      }
+
       const newVdom = this.accessBluePrint()(this.getProps());
+
+      // Tag the root of the new tree with the instance ID
+      newVdom.props = newVdom.props || {};
+      newVdom.props['ferali-id'] = this.instanceID;
+
+      // Clear context after render
+      CURRENT_COMPONENT.component = null;
+
       await UPDATE_DOM(this.getCurrentDOM(), newVdom, this.getCurrentDOM().ell.parentNode);
       this.setNewDOM(newVdom);
       this.isUpdating = false;
     }
   }
 
+  /**
+   * Destroys the component: removes its CSS if it was the last user, tears down
+   * the VDOM tree, and clears all hook state from storage.
+   * @returns {Promise<void>}
+   */
   async destroy() {
-    if (this.getCurrentDOM() !== null && !this.isDestroyed) {
-      this.isDestroyed = true;
+    if (this.getCurrentDOM() === null || this.isDestroyed) return;
+    this.isDestroyed = true;
 
-      // Handle Stylesheet Removal
-      const config = this.getConfig();
-      if (config.style && config.style.path) {
-        const path = config.style.path;
-        let count = STYLESHEET_REGISTRY.get(path) || 0;
-        
-        if (count > 0) {
-          count--;
-          if (count === 0) {
-            const link = document.querySelector(`link[data-ferali-style="${path}"]`);
-            if (link) link.remove();
-            STYLESHEET_REGISTRY.delete(path);
-          } else {
-            STYLESHEET_REGISTRY.set(path, count);
-          }
+    const config = this.getConfig();
+    const cid = this.INFO().__componentID;
+    if (config.style && config.style.path) {
+      const path = config.style.path;
+      const href = config.style.localized
+        ? `${path}?localized=true&ferali-cid=${cid}`
+        : path;
+
+      let count = STYLESHEET_REGISTRY.get(href) || 0;
+      if (count > 0) {
+        count--;
+        if (count === 0) {
+          const link = document.querySelector(`link[data-ferali-style="${href}"]`);
+          if (link) link.remove();
+          STYLESHEET_REGISTRY.delete(href);
+        } else {
+          STYLESHEET_REGISTRY.set(href, count);
         }
       }
+    }
 
-      await DESTROY_DOM(this.getCurrentDOM());
-      this.setNewDOM(null);
+    await DESTROY_DOM(this.getCurrentDOM());
+    this.setNewDOM(null);
 
-      if (this.instanceID) {
-        STORAGE.STATE.delete(this.instanceID);
-        STORAGE.EFFECT.delete(this.instanceID);
-      }
+    if (this.instanceID) {
+      STORAGE.STATE.delete(this.instanceID);
+      STORAGE.EFFECT.delete(this.instanceID);
     }
   }
 }

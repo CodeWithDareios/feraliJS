@@ -1,7 +1,7 @@
-export function parseText(scanner, endToken) {
+export function parseText(scanner, stopTokens = []) {
+  if (typeof stopTokens === 'string') stopTokens = [stopTokens];
   let content = '';
-  const breaks = ['<?js', '{{', '<{', '<', '@'];
-  if (endToken) breaks.push(endToken);
+  const breaks = ['<?', '{{', '<', '@', ...stopTokens];
 
   while (!scanner.eof()) {
     if (breaks.some(b => scanner.peek(b.length) === b)) break;

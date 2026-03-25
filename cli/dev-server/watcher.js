@@ -58,15 +58,26 @@ export function setupWatcher(rootDir) {
         const targetPath = path.join(rootDir, relativeTarget);
         
         if (fs.existsSync(targetPath)) {
-            const isDirectory = fs.statSync(targetPath).isDirectory();
+            const stat = fs.statSync(targetPath);
+            const isDirectory = stat.isDirectory();
             
+            // Pre-populate cache for all existing files to prevent reload on first access
+            if (isDirectory) {
+                populateMtimeCache(targetPath);
+            } else {
+                mtimeCache.set(targetPath, stat.mtimeMs);
+            }
+
             fs.watch(targetPath, { recursive: isDirectory }, (eventType, filename) => {
                 if (filename) {
                     const fullPath = path.join(isDirectory ? targetPath : rootDir, filename);
                     
                     try {
-                        // Check if file was ACTUALLY modified (prevents Windows firing on read access)
+                        // Ignore directories and non-existent files
                         const stat = fs.statSync(fullPath);
+                        if (stat.isDirectory()) return;
+
+                        // Check if file was ACTUALLY modified (prevents Windows firing on read access)
                         if (mtimeCache.get(fullPath) === stat.mtimeMs) return;
                         mtimeCache.set(fullPath, stat.mtimeMs);
                     } catch (e) {
@@ -81,4 +92,24 @@ export function setupWatcher(rootDir) {
             });
         }
     });
+}
+
+/**
+ * Recursively populates the mtime cache for all files in a directory.
+ */
+function populateMtimeCache(dir) {
+    try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                populateMtimeCache(fullPath);
+            } else {
+                const stat = fs.statSync(fullPath);
+                mtimeCache.set(fullPath, stat.mtimeMs);
+            }
+        }
+    } catch (e) {
+        // Ignore errors during startup cache population
+    }
 }

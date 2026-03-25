@@ -45,7 +45,7 @@ export function handleRequest(req, res, rootDir) {
         const safePath = safeJoinPath(coreDir, '/' + coreRelativePath);
 
         if (!safePath) return serve404(res);
-        return serveFile(res, safePath);
+        return serveFile(req, res, safePath);
     }
 
     if (url.startsWith('/@ferali-router/')) {
@@ -54,7 +54,7 @@ export function handleRequest(req, res, rootDir) {
         const safePath = safeJoinPath(coreDir, '/' + coreRelativePath);
 
         if (!safePath) return serve404(res);
-        return serveFile(res, safePath);
+        return serveFile(req, res, safePath);
     }
 
     // 3. Handle public folder with tight security
@@ -70,14 +70,14 @@ export function handleRequest(req, res, rootDir) {
             return;
         }
 
-        return serveFile(res, safePath);
+        return serveFile(req, res, safePath);
     }
 
     // 4. Handle src folder
     if (url.startsWith('/src/')) {
         const safePath = safeJoinPath(rootDir, url);
         if (!safePath) return serve404(res);
-        return serveFile(res, safePath);
+        return serveFile(req, res, safePath);
     }
 
     // 5. Default SPA Routing -> serve root index.html
@@ -110,8 +110,14 @@ function serveIndexWithScripts(res, indexPath) {
 
 /**
  * Standalone file serving logic determining the actual MIME type.
+ * Supports on-the-fly CSS transformation for localized components.
  */
-function serveFile(res, filePath) {
+function serveFile(req, res, filePath) {
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const isLocalized = url.searchParams.get('localized') === 'true';
+    const feraliCid = url.searchParams.get('ferali-cid');
+
+    // Read as buffer to support images/binary files
     fs.readFile(filePath, (err, data) => {
         if (err) {
             if (err.code === 'ENOENT') {
@@ -123,8 +129,46 @@ function serveFile(res, filePath) {
         }
 
         const mimeType = getContentType(filePath);
+        
+        // Only transform if it's a CSS file AND localization is requested
+        if (isLocalized && feraliCid && filePath.endsWith('.css')) {
+            const transformed = transformScopedCss(data.toString('utf8'), feraliCid);
+            res.writeHead(200, { 'Content-Type': mimeType });
+            return res.end(transformed);
+        }
+
         res.writeHead(200, { 'Content-Type': mimeType });
         res.end(data);
+    });
+}
+
+/**
+ * Prefixes CSS selectors with [ferali-id="id"] to ensure scoping.
+ * Uses a lookbehind check to ensure we only prefix characters that follow a delimiter (;, {, or })
+ * or the start of the file, and are followed by an opening brace.
+ */
+function transformScopedCss(css, id) {
+    // Regex: find sequences that don't contain delimiters, preceded by a delimiter or start, and followed by {
+    return css.replace(/(?<=^|[}{;])([^}{;]+)(?={)/g, (match) => {
+        if (match.trim().startsWith('@')) return match;
+        
+        const scoped = match.split(',')
+            .map(s => {
+                const trimmed = s.trim();
+                const leadingWhitespace = s.match(/^\s*/)[0];
+                if (!trimmed) return s;
+                
+                // If :host is present, replace it with the specific ID selector
+                // Otherwise, prefix to ensure nesting/descendant scoping
+                if (trimmed.includes(':host')) {
+                    return `${leadingWhitespace}${trimmed.replace(':host', `[ferali-cid="${id}"]`)}`;
+                }
+
+                return `${leadingWhitespace}[ferali-cid="${id}"] ${trimmed}`;
+            })
+            .join(',');
+        
+        return scoped;
     });
 }
 

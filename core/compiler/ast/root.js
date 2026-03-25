@@ -10,7 +10,7 @@ export function generateRoot(nodes, isInsideJsBlock = false) {
     return generateNode(validNodes[0], isInsideJsBlock);
   } else if (validNodes.length > 1) {
     const childrenStr = validNodes.map(n => generateNode(n, isInsideJsBlock)).join(', ');
-    return `h('div', null, [${childrenStr}])`;
+    return `__h('div', null, [${childrenStr}])`;
   }
   return `null`;
 }

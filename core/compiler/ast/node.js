@@ -8,7 +8,7 @@ export function generateNode(node, isInsideJsBlock = false) {
     case 'element':
       const attrs = generateAttributes(node.attributes, isInsideJsBlock);
       const children = node.children.map(n => generateNode(n, isInsideJsBlock)).join(', ');
-      return `h('${node.tag}', {${attrs}}, [${children}])`;
+      return `__h('${node.tag}', {${attrs}}, [${children}])`;
 
     case 'text':
       // Escape backticks and newlines for safe template literals
@@ -20,8 +20,9 @@ export function generateNode(node, isInsideJsBlock = false) {
 
     case 'component':
       const props = compileProps(node.props.trim() || '{}', isInsideJsBlock);
-      const compName = isInsideJsBlock ? node.name : `contextObject['${node.name}']`;
-      return `useComponent(${compName}, ${props})`;
+      // Try resolving as a destructured variable first, fall back to contextObject lookup.
+      const compName = isInsideJsBlock ? node.name : `(typeof ${node.name} !== 'undefined' ? ${node.name} : contextObject['${node.name}'])`;
+      return `__useComponent(${compName}, ${props})`;
 
     case 'js_block':
       const jsContent = node.chunks
@@ -32,11 +33,11 @@ export function generateNode(node, isInsideJsBlock = false) {
           }
         })
         .join('');
-      return `(function(contextObject){
-        with(contextObject) {
+      // No more with(contextObject)! The IIFE naturally inherits variables 
+      // destructured at the top of the blueprint function.
+      return `(() => {
           return ${jsContent} 
-        }
-      }).call(contextObject, contextObject)`; // Auto-run function
+      }).call(contextObject)`; // Auto-run IIFE with this bound to contextObject
 
     default:
       return 'null';

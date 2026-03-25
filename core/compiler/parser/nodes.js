@@ -6,10 +6,11 @@ import { parseText } from './text.js';
 
 import { TEXT } from '../../node/identity.js';
 
-export function parseNodes(scanner, endToken = null) {
+export function parseNodes(scanner, stopTokens = []) {
+  if (typeof stopTokens === 'string') stopTokens = [stopTokens];
   const nodes = [];
   while (!scanner.eof()) {
-    if (endToken && scanner.peek(endToken.length) === endToken) break;
+    if (stopTokens.some(t => scanner.peek(t.length) === t)) break;
 
     if (scanner.peek(2) === '<?') {
       nodes.push(parseJsBlock(scanner));
@@ -22,10 +23,10 @@ export function parseNodes(scanner, endToken = null) {
       scanner.peek(2) !== '</' &&
       scanner.peek(2) !== '<{'
     ) {
-      nodes.push(parseElement(scanner));
+      nodes.push(parseElement(scanner, stopTokens));
     } else {
-      const Text = parseText(scanner, endToken);
-      if (Text.content.trim() != 0) {
+      const Text = parseText(scanner, stopTokens);
+      if (Text.content.trim().length > 0) {
         nodes.push(Text);
       }
     }

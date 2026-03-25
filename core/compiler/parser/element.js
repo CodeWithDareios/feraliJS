@@ -1,7 +1,7 @@
 import { parseAttributes } from './attributes.js';
 import { parseNodes } from './nodes.js';
 
-export function parseElement(scanner) {
+export function parseElement(scanner, outerStopTokens = []) {
   scanner.consume(1); // Consume '<'
 
   let tag = '';
@@ -22,8 +22,15 @@ export function parseElement(scanner) {
 
   let children = [];
   if (!voidElements.includes(tag.toLowerCase())) {
-    children = parseNodes(scanner, `</${tag}>`); // Recursively parse children
-    scanner.consumeUntil('>'); // Clear out the rest of the closing tag
+    const stopToken = `</${tag}>`;
+    // Pass both the current stop token AND any outer stop tokens (like ?> or }>)
+    children = parseNodes(scanner, [stopToken, ...outerStopTokens]); 
+    
+    // Only consume the closing tag if we actually stopped for it
+    if (scanner.peek(stopToken.length) === stopToken) {
+       scanner.consumeUntil('>'); 
+       scanner.consume(1); // the '>'
+    }
   }
 
   return {
