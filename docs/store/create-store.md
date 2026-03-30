@@ -116,9 +116,9 @@ const Counter = defineComponent({
 
     return useTemplate(`
       <div>
-        <button #click="{{ decrement }}">-</button>
+        <button #click="decrement">-</button>
         <span>{{ count }}</span>
-        <button #click="{{ increment }}">+</button>
+        <button #click="increment">+</button>
       </div>
     `);
   }
@@ -132,7 +132,7 @@ const { value: darkMode, toggle: toggleDark } = store.subscribe('darkMode');
 
 return useTemplate(`
   <nav class="{{ darkMode ? 'dark' : 'light' }}">
-    <button #click="{{ toggleDark }}">Toggle Theme</button>
+    <button #click="toggleDark">Toggle Theme</button>
   </nav>
 `);
 ```
@@ -144,8 +144,8 @@ const { data, loading, error } = store.subscribe('notifications');
 
 return useTemplate(`
   <div>
-    <? loading ? <{ <span>Loading...</span> }> : null ?>
-    <? data ? <{ <span>{{ data.count }} new notifications</span> }> : null ?>
+    <? this.loading ? <{ <span>Loading...</span> }> : null ?>
+    <? this.data ? <{ <span>{{ data.count }} new notifications</span> }> : null ?>
   </div>
 `);
 ```

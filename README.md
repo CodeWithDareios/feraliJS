@@ -2,7 +2,7 @@
 
 # FeraliJs
 
-**A fast, beginner-friendly JavaScript frontend framework — built from scratch.**
+**A fast, beginner-friendly JavaScript frontend framework — built from scratch as a learning project.**
 
 [![Node.js](https://img.shields.io/badge/Node.js-v18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![License](https://img.shields.io/badge/License-ISC-blue)](#license)
@@ -12,7 +12,7 @@
 
 ---
 
-FeraliJs is a complete frontend framework that gives you everything you need to build modern single-page applications — with no third-party dependencies, no build tooling required, and no magic you can't read.
+> **About this project:** FeraliJs was built as a personal deep-dive into how frontend frameworks actually work. The goal was not to replace React or Vue, but to understand the machinery behind them — the virtual DOM, the reactive system, the template compiler, the router — by building each piece from scratch. It is both a learning exercise and a fully functional framework you can use to build real apps.
 
 ```js
 import { createApp, defineComponent } from 'ferali';
@@ -22,11 +22,12 @@ import { State }                      from 'ferali/hooks';
 const App = defineComponent({
   render() {
     const [count, setCount] = State(0);
+    const increment = () => setCount(count + 1);
 
     return useTemplate(`
       <div>
         <h1>Count: {{ count }}</h1>
-        <button #click="{{ () => setCount(count.__raw + 1) }}">+</button>
+        <button #click="increment">+</button>
       </div>
     `);
   }
@@ -41,13 +42,13 @@ createApp('root').mount(App);
 
 - 🧩 **Component System** — Define self-contained UI components with a clean config-object API and automatic lifecycle management.
 - 🔥 **Reactive Hooks** — `State`, `Effect`, `Memo`, `Ref`, `Toggle`, `Debounce`, and more — all scoped per-component instance.
-- 📝 **Declarative Templates** — Write plain HTML with `{{ interpolation }}`, `#eventBindings`, and `@ChildComponents`. A custom compiler handles the rest.
+- 📝 **Declarative Templates** — Write plain HTML with `{{ interpolation }}`, `#eventBindings`, and `@ChildComponents()`. A custom compiler handles the rest.
 - ⚡ **Virtual DOM** — Efficient diffing engine with keyed list reconciliation. Only the parts of the DOM that actually changed are updated.
 - 🗺 **Built-in SPA Router** — Nested routes, dynamic path params (`:id`), wildcards (`*`), query strings, and two custom HTML elements: `<router-outlet>` and `<route-to>`.
 - 🌐 **Global Store** — Cross-component reactive state with explicit subscriptions and batched async updates.
 - 🎨 **Localized CSS Scoping** — Opt-in per-component CSS scoping. The Dev Server rewrites your stylesheet to scope every rule under the component's unique ID.
 - 🛠 **Zero-Config Dev Server** — Built-in HTTP server with import map injection, hot module replacement (HMR), and transparent template auto-injection. Run `npm run dev` and go.
-- 📦 **Zero Build Step** — Ships as native ES modules. No Webpack, Vite, Rollup, or any bundler needed for development.
+- 📦 **Zero Build Step** — Ships as native ES modules. No Webpack, Vite, Rollup, or any bundler needed for development. (Official bundler for project exports coming in later versions)
 
 ---
 
@@ -86,10 +87,10 @@ my-app/
 ### Reactive State
 
 ```js
-const [name, setName] = State('');
+const [name, setName]   = State('');
 const [items, setItems] = State([]);
 
-const addItem = () => setItems([...items.__raw, name.__raw]);
+const addItem = () => setItems([...items, name]);
 ```
 
 ### Template Syntax
@@ -98,21 +99,21 @@ const addItem = () => setItems([...items.__raw, name.__raw]);
 <!-- Interpolation -->
 <h1>Hello, {{ user.name }}!</h1>
 
-<!-- Event binding -->
-<button #click="{{ handleClick }}">Submit</button>
+<!-- Event binding (function name directly, no {{ }}) -->
+<button #click="handleClick">Submit</button>
 
 <!-- Child components -->
 @UserCard({ name: "{{ user.name }}", active: {{ isOnline }} })
 
-<!-- Conditional rendering -->
-<? isLoggedIn
+<!-- Conditional rendering — state via this inside <? ?> -->
+<? this.isLoggedIn
   ? <{ <p>Welcome back!</p> }>
   : <{ <p>Please log in.</p> }>
 ?>
 
-<!-- List rendering -->
+<!-- List rendering — this.items in JS, {{ }} inside <{ }> -->
 <ul>
-  <? items.map(item => <{ <li key="{{ item.id }}">{{ item.name }}</li> }>) ?>
+  <? this.items.map(item => <{ <li>{{ item.name }}</li> }>) ?>
 </ul>
 ```
 
@@ -125,16 +126,17 @@ const Counter = defineComponent({
 
   render() {
     const [count, setCount] = State(0);
+    const increment = () => setCount(count + 1);
 
     // Sync document title whenever count changes
     Effect(() => {
-      document.title = `Count: ${count.__raw}`;
+      document.title = `Count: ${count}`;
     }, [count]);
 
     return useTemplate(`
       <div>
         <p>{{ count }}</p>
-        <button #click="{{ () => setCount(count.__raw + 1) }}">+</button>
+        <button #click="increment">+</button>
       </div>
     `);
   }
@@ -173,6 +175,7 @@ export default store;
 
 // In any component
 const { value: count, set: setCount } = store.subscribe('cartCount');
+const addToCart = () => setCount(count + 1);
 ```
 
 ---

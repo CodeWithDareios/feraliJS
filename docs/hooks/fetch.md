@@ -59,9 +59,9 @@ const UserProfile = defineComponent({
 
     return useTemplate(`
       <div>
-        <? loading ? <{ <p>Loading...</p> }> : null ?>
-        <? error ? <{ <p class="error">Error: {{ error.message }}</p> }> : null ?>
-        <? !loading && !error ? <{
+        <? this.loading ? <{ <p>Loading...</p> }> : null ?>
+        <? this.error ? <{ <p class="error">Error: {{ error.message }}</p> }> : null ?>
+        <? !this.loading && !this.error ? <{
           <div class="profile">
             <h1>{{ user.name }}</h1>
             <p>{{ user.email }}</p>

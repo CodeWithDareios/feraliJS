@@ -88,7 +88,7 @@ The parser reads from the scanner and produces an **AST** — an array of node o
 Attributes are parsed using the regex `/(#?[a-zA-Z0-9_\-]+)="([^"]*)"/g`.
 
 - Regular attributes: `class="foo"` → `{ name: 'class', value: 'foo' }`
-- Event attributes: `#click="{{ handler }}"` → `{ name: '#click', value: '{{ handler }}' }`
+- Event attributes: `#click="handler"` → `{ name: '#click', value: handler }`
 
 ---
 
@@ -160,7 +160,7 @@ Every `<? ?>` block is compiled into an Immediately Invoked Function Expression 
 // Template: <? items.map(item => <{ <li>{{ item }}</li> }>) ?>
 // Generated:
 (() => {
-  return items.map(item => __h('li', null, [`${item}`]))
+  return this.items.map(item => __h('li', null, [`${item}`]))
 }).call(contextObject)
 ```
 

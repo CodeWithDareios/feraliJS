@@ -63,25 +63,37 @@ Interpolations support any valid JavaScript expression, including property acces
 
 ---
 
-### 2. Event Binding: `#eventName="{{ handler }}"`
+### 2. Event Binding: `#eventName="handler"`
 
-Binds a DOM event listener to a function defined in the component.
+Binds a DOM event listener to a function. Write the function reference (or inline arrow function) **directly** — no `{{ }}` wrapping:
 
 ```html
-<button #click="{{ handleClick }}">Click me</button>
-<input #input="{{ handleInput }}">
-<form #submit="{{ handleSubmit }}">
+<button #click="handleClick">Click me</button>
+<input  #input="handleInput">
+<form   #submit="handleSubmit">
 ```
 
-The `#` prefix is the Ferali event directive. The event name directly follows (e.g., `#click`, `#keydown`). The value must be the reference to a function — **not** a function call.
+You can also write inline arrow functions:
+
+```html
+<button #click="() => setCount(count + 1)">+</button>
+<input  #input="e => setName(e.target.value)">
+```
+
+The `#` prefix is the Ferali event directive. The event name directly follows (`#click`, `#keydown`, etc.).
+
+> **Important:** `{{ }}` interpolation syntax does **not** work inside `#event` attributes. Write the handler name or inline function directly.
 
 ```js
-// Correct
-const handleClick = () => setCount(count.__raw + 1);
-return useTemplate(`<button #click="{{ handleClick }}">Click</button>`);
+// Correct — define handler in render(), reference by name in the template
+const handleClick = () => setCount(count + 1);
+return useTemplate(`<button #click="handleClick">Click</button>`);
 
-// Wrong — calling the function instead of referencing it
-return useTemplate(`<button #click="{{ handleClick() }}">Click</button>`);
+// Wrong — do NOT call the function
+return useTemplate(`<button #click="handleClick()">Click</button>`);
+
+// Wrong — do NOT use {{ }} wrapping
+return useTemplate(`<button #click="{{ handleClick }}">Click</button>`);
 ```
 
 ---
@@ -108,15 +120,19 @@ The component name must be in scope in the render function context.
 
 ### 4. JavaScript Blocks: `<? expression ?>`
 
-Embeds any JavaScript expression directly in the template. The result is rendered into the DOM.
+Embeds any JavaScript expression directly in the template. Inside a `<? ?>` block you write plain JavaScript — the IIFE is bound to the component context via `.call(contextObject)`, so **reactive variables from `render()` are accessed via `this.variable`**:
 
 ```html
-<!-- Conditional rendering -->
-<? isLoggedIn ? <{ <div>Welcome back!</div> }> : <{ <div>Please log in.</div> }> ?>
+<!-- Pure JS expressions — no this needed -->
+<? 2 + 2 ?>
+<? new Date().getFullYear() ?>
+
+<!-- State variables from render() — use this -->
+<? this.isLoggedIn ? <{ <div>Welcome back!</div> }> : <{ <div>Please log in.</div> }> ?>
 
 <!-- Iterating a list -->
 <ul>
-  <? items.map(item => <{ <li>{{ item.name }}</li> }>) ?>
+  <? this.items.map(item => <{ <li>{{ item.name }}</li> }>) ?>
 </ul>
 ```
 
@@ -126,17 +142,17 @@ Embeds any JavaScript expression directly in the template. The result is rendere
 
 ### 5. HTML-in-JS Blocks: `<{ <html/> }>`
 
-A special syntax used exclusively *inside* `<? ?>` blocks. Allows embedding HTML markup as the return value of a JavaScript expression.
+A special syntax used exclusively *inside* `<? ?>` blocks. Allows embedding HTML markup as the return value of a JavaScript expression. Inside `<{ }>` you are back in HTML context, so **`{{ }}` interpolation works again**:
 
 ```html
-<? condition ? <{ <strong>Yes</strong> }> : <{ <em>No</em> }> ?>
+<? this.condition ? <{ <strong>Yes</strong> }> : <{ <em>No</em> }> ?>
 ```
 
 This is how list rendering works in Ferali:
 
 ```html
 <ul>
-  <? todos.map(todo =>
+  <? this.todos.map(todo =>
     <{ <li class="todo">{{ todo.text }}</li> }>
   ) ?>
 </ul>
@@ -150,13 +166,17 @@ This is how list rendering works in Ferali:
 |--------|--------|
 | `class="my-class"` | Static string attribute |
 | `id="main"` | Static string attribute |
-| `#click="{{ handler }}"` | Dynamic event listener |
+| `#click="handler"` | Dynamic event listener |
 
-All attributes without the `#` prefix are treated as static strings. Dynamic data binding for non-event attributes is done via template interpolation in the attribute value:
+All attributes without the `#` prefix are treated as **static strings**. Dynamic data in attributes is handled by text interpolation only for `{{ expression }}` in text content nodes.
 
-```html
-<div class="{{ dynamicClass }}">...</div>
-```
+> **Summary of where `{{ }}` works and where `this.` is needed:**
+> - ✅ `{{ }}` in text content: `<p>{{ name }}</p>`
+> - ✅ `{{ }}` inside `<{ ... }>` HTML-in-JS blocks: `<{ <p>{{ name }}</p> }>`
+> - ✅ `{{ }}` in component props: `@Card({ title: "{{ name }}" })`
+> - ✅ `this.variable` inside `<? ... ?>` JS blocks: `<? this.count > 0 ? ... ?>`
+> - ❌ `{{ }}` inside `<? ... ?>` JS code (not inside `<{ }>`) — use `this.variable`
+> - ❌ `{{ }}` inside `#event` attribute values — write handler name directly
 
 ---
 
@@ -167,8 +187,8 @@ The compiler correctly handles HTML void elements — they do not need a closing
 `area`, `base`, `br`, `col`, `embed`, `hr`, `img`, `input`, `link`, `meta`, `param`, `source`, `track`, `wbr`
 
 ```html
-<img src="{{ imageUrl }}" alt="Profile">
-<input #input="{{ handleInput }}" type="text">
+<img src="profilePic.jpg" alt="Profile">
+<input #input="handleInput" type="text">
 <br>
 ```
 
@@ -180,7 +200,7 @@ For efficient list re-rendering, use a `key` attribute on repeated elements. The
 
 ```html
 <ul>
-  <? items.map(item => <{ <li key="{{ item.id }}">{{ item.name }}</li> }>) ?>
+  <? items.map(item => <{ <li key={{ item.key }}>{{ item.name }}</li> }>) ?>
 </ul>
 ```
 

@@ -48,7 +48,7 @@ const { data: stock, loading, error } = FetchPolling('/api/stock/FRAL', 3000);
 
 return useTemplate(`
   <div class="ticker">
-    <? loading ? <{ <span>--</span> }> : <{
+    <? this.loading ? <{ <span>--</span> }> : <{
       <span class="price">{{ stock.price }}</span>
     }> ?>
   </div>

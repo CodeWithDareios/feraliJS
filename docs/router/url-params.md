@@ -99,7 +99,7 @@ const SearchPage = defineComponent({
 
     return useTemplate(`
       <div>
-        <input value="{{ q }}" #input="{{ handleSearch }}" placeholder="Search..." />
+        <input value="{{ q }}" #input="handleSearch" placeholder="Search..." />
       </div>
     `);
   }

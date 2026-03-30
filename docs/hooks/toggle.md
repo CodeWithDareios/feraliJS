@@ -35,10 +35,10 @@ const [menuOpen, toggleMenu] = Toggle(false);
 
 return useTemplate(`
   <div>
-    <button #click="{{ toggleMenu }}">
-      <? menuOpen ? <{ <span>Close</span> }> : <{ <span>Open</span> }> ?>
+    <button #click="toggleMenu">
+      <? this.menuOpen ? <{ <span>Close</span> }> : <{ <span>Open</span> }> ?>
     </button>
-    <? menuOpen ? <{
+    <? this.menuOpen ? <{
       <nav>
         <a href="/">Home</a>
         <a href="/about">About</a>

@@ -56,7 +56,7 @@ const toggleTheme = () => setTheme(theme.__raw === 'light' ? 'dark' : 'light');
 
 return useTemplate(`
   <body class="{{ theme }}">
-    <button #click="{{ toggleTheme }}">Toggle Theme</button>
+    <button #click="toggleTheme">Toggle Theme</button>
   </body>
 `);
 ```

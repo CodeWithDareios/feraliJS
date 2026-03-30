@@ -54,7 +54,7 @@ const App = defineComponent({
     return useTemplate(`
       <div>
         <h1>{{ greeting }}</h1>
-        <button #click="{{ () => setGreeting('Hello, FeraliJs!') }}">
+        <button #click="() => setGreeting('Hello, FeraliJs!')">
           Change Greeting
         </button>
       </div>
@@ -130,22 +130,24 @@ const MyComponent = defineComponent({
 ```html
 <p>{{ name }}</p>
 <p>{{ user.profile.email }}</p>
-<p>{{ count.__raw + 1 }}</p>
+<p>{{ count + 1 }}</p>
 <p>{{ isActive ? 'Online' : 'Offline' }}</p>
 ```
 
 ### Event Binding
 
+The `#` prefix binds a DOM event to a function. Write the function reference (or inline arrow) **directly** — no `{{ }}` wrapping:
+
 ```html
 <!-- Reference a named handler -->
-<button #click="{{ handleClick }}">Click</button>
+<button #click="handleClick">Click</button>
 
 <!-- Inline arrow function -->
-<button #click="{{ () => setCount(count.__raw + 1) }}">+</button>
+<button #click="() => setCount(count + 1)">+</button>
 
-<!-- Pass event object -->
-<input #input="{{ e => setName(e.target.value) }}">
-<form  #submit="{{ e => { e.preventDefault(); handleSubmit(); } }}">
+<!-- Pass the event object -->
+<input #input="e => setName(e.target.value)">
+<form  #submit="e => { e.preventDefault(); handleSubmit(); }">
 ```
 
 Any DOM event works: `#click`, `#keydown`, `#input`, `#change`, `#submit`, `#mouseover`, etc.
@@ -155,6 +157,8 @@ Any DOM event works: `#click`, `#keydown`, `#input`, `#change`, `#submit`, `#mou
 ```html
 <!-- Embed a component with no props -->
 @Header({})
+<!-- or -->
+@Header()
 
 <!-- With static props -->
 @Card({ title: "My Card", color: "blue" })
@@ -167,18 +171,16 @@ The component must be in scope in the render function — either imported or cre
 
 ### JavaScript Blocks
 
-Execute arbitrary JavaScript inside a template with `<? ?>`:
+Inside a `<? ?>` block you write plain JavaScript. The IIFE is bound to the component context via `.call(contextObject)`, so reactive variables from `render()` are accessed through **`this.variable`**.
+
+Inside `<{ ... }>` (HTML-in-JS) you are back in HTML context, so `{{ }}` interpolation works again:
 
 ```html
-<? 2 + 2 ?>                               <!-- renders: 4 -->
-<? new Date().getFullYear() ?>            <!-- renders: 2026 -->
-<? Math.max(a.__raw, b.__raw) ?>          <!-- renders: max value -->
-```
-
-Use `<{ }>` to embed HTML inside a JS block:
-
-```html
-<? isAdmin ? <{ <span class="badge">Admin</span> }> : null ?>
+<? 2 + 2 ?>                           <!-- pure JS, no this needed -->
+<? new Date().getFullYear() ?>        <!-- pure JS -->
+<? Math.max(this.a, this.b) ?>        <!-- state via this -->
+<? this.isAdmin ? <{ <span class="badge">Admin</span> }> : null ?>
+<? this.count > 0 ? <{ <p>You have {{ count }} items</p> }> : null ?>
 ```
 
 ---
@@ -206,26 +208,39 @@ State proxies work transparently in templates:
 
 ### Updating State (Object)
 
+To update a state object, always create a new object — do not mutate in place:
+
 ```js
-// Always create a new object — don't mutate in place
 const updateName = (newName) => setUser({ ...user.__raw, name: newName });
 ```
 
+> **Note:** Object-type state requires `.__raw` when spreading (`{ ...obj.__raw }`) because object spread enumerates own properties and the proxy has none.
+
 ### Updating State (Array)
 
+Array method calls work directly on the proxy — the proxy forwards them to the underlying array:
+
 ```js
-const addItem  = (item) => setTags([...tags.__raw, item]);
-const removeItem = (i)  => setTags(tags.__raw.filter((_, idx) => idx !== i));
+const addItem    = (item) => setTags([...tags, item]);
+const removeItem = (i)    => setTags(tags.filter((_, idx) => idx !== i));
 ```
 
-### The `__raw` Property
+### Accessing Values in JavaScript
 
-The proxy's `.toString()` and `.valueOf()` handle template rendering automatically. For JavaScript logic, use `.__raw` to get the actual value:
+For primitive state (numbers, strings, booleans), the proxy automatically handles coercion so you can use the value anywhere JavaScript would call `valueOf()` or `toString()` — arithmetic, string concatenation, comparisons, etc.:
 
 ```js
-const isEven   = count.__raw % 2 === 0;
-const doubled  = count.__raw * 2;
-const hasItems = tags.__raw.length > 0;
+const doubled  = count * 2;          // works — valueOf() is called
+const label    = 'Count: ' + count;  // works — toString() is called
+const isEven   = count % 2 === 0;    // works
+const hasItems = tags.length > 0;    // works — .length forwards to raw array
+```
+
+The `.__raw` property is available if you ever need the exact primitive value (e.g., strict equality `=== 0`, or JSON serialization):
+
+```js
+if (count.__raw === 0) showEmpty();
+console.log(JSON.stringify(count.__raw));
 ```
 
 ### Toggle
@@ -256,7 +271,7 @@ Effect(() => {
 const [userId, setUserId] = State(1);
 
 Effect(() => {
-  console.log('User ID changed to:', userId.__raw);
+  console.log('User ID changed to:', userId);
   // fetch user data, etc.
 }, [userId]);
 ```
@@ -275,7 +290,7 @@ Effect(() => {
 ```js
 Effect(() => {
   // Runs after every render
-  document.title = `${count.__raw} items`;
+  document.title = `${count} items`;
 });
 ```
 
@@ -297,13 +312,13 @@ Event('scroll', syncScrollPosition, window, { passive: true });
 Use `Memo` for values derived from other state:
 
 ```js
-const [items, setItems]   = State([1, 2, 3, 4, 5]);
-const [min, setMin]       = State(0);
-const [max, setMax]       = State(10);
+const [items, setItems] = State([1, 2, 3, 4, 5]);
+const [min, setMin]     = State(0);
+const [max, setMax]     = State(10);
 
 // Recomputes automatically whenever `items`, `min`, or `max` changes
 const filtered = Memo(
-  () => items.__raw.filter(n => n >= min.__raw && n <= max.__raw),
+  () => items.filter(n => n >= min && n <= max),
   [items, min, max]
 );
 
@@ -324,7 +339,7 @@ const [value, setValue] = State('');
 const handleInput = (e) => setValue(e.target.value);
 
 return useTemplate(`
-  <input #input="{{ handleInput }}" />
+  <input #input="handleInput" />
   <p>You typed: {{ value }}</p>
 `);
 ```
@@ -337,13 +352,13 @@ const [email, setEmail] = State('');
 
 const handleSubmit = (e) => {
   e.preventDefault();
-  console.log({ name: name.__raw, email: email.__raw });
+  console.log({ name: name.__raw, email: email.__raw }); // .__raw for serialization
 };
 
 return useTemplate(`
-  <form #submit="{{ handleSubmit }}">
-    <input #input="{{ e => setName(e.target.value) }}"   placeholder="Name"  />
-    <input #input="{{ e => setEmail(e.target.value) }}"  placeholder="Email" />
+  <form #submit="handleSubmit">
+    <input #input="e => setName(e.target.value)"   placeholder="Name"  />
+    <input #input="e => setEmail(e.target.value)"  placeholder="Email" />
     <button type="submit">Submit</button>
   </form>
 `);
@@ -355,11 +370,11 @@ return useTemplate(`
 const [query, setQuery] = Debounce('', 400);
 
 Effect(() => {
-  if (query.__raw) performSearch(query.__raw);
+  if (query) performSearch(query);
 }, [query]);
 
 return useTemplate(`
-  <input #input="{{ e => setQuery(e.target.value) }}" placeholder="Search..." />
+  <input #input="e => setQuery(e.target.value)" placeholder="Search..." />
 `);
 ```
 
@@ -376,13 +391,13 @@ const [todos, setTodos] = State([
 ]);
 
 const toggle = (id) => setTodos(
-  todos.__raw.map(t => t.id === id ? { ...t, done: !t.done } : t)
+  todos.map(t => t.id === id ? { ...t, done: !t.done } : t)
 );
 
 return useTemplate(`
   <ul>
-    <? todos.map(todo => <{
-      <li key="{{ todo.id }}" #click="{{ () => toggle(todo.id) }}">
+    <? this.todos.map(todo => <{
+      <li #click="() => toggle(todo.id)">
         {{ todo.text }}
       </li>
     }>) ?>
@@ -399,7 +414,7 @@ return useTemplate(`
 ### Ternary Expression
 
 ```html
-<? isLoggedIn
+<? this.isLoggedIn
   ? <{ <p>Welcome back!</p> }>
   : <{ <p>Please log in.</p> }>
 ?>
@@ -408,16 +423,16 @@ return useTemplate(`
 ### And Short-Circuit (show only if true)
 
 ```html
-<? isLoading ? <{ <div class="spinner"></div> }> : null ?>
+<? this.isLoading ? <{ <div class="spinner"></div> }> : null ?>
 ```
 
 ### Complex Conditions
 
 ```html
 <?
-  error
+  this.error
     ? <{ <p class="error">{{ error.message }}</p> }>
-    : loading
+    : this.loading
       ? <{ <p>Loading...</p> }>
       : <{ <div class="content">{{ data.title }}</div> }>
 ?>
@@ -592,7 +607,7 @@ const User = defineComponent({
 
     return useTemplate(`
       <div>
-        <? loading ? <{ <p>Loading...</p> }> : <{ <h1>{{ user.name }}</h1> }> ?>
+        <? this.loading ? <{ <p>Loading...</p> }> : <{ <h1>{{ user.name }}</h1> }> ?>
       </div>
     `);
   }
@@ -694,10 +709,10 @@ const Shop = defineComponent({
   render() {
     const { value: count, set: setCount } = store.subscribe('cartCount');
 
-    const addToCart = () => setCount(count.__raw + 1);
+    const addToCart = () => setCount(count + 1);
 
     return useTemplate(`
-      <button #click="{{ addToCart }}">Add to Cart</button>
+      <button #click="addToCart">Add to Cart</button>
     `);
   }
 });
@@ -763,11 +778,11 @@ const PostList = defineComponent({
 
     return useTemplate(`
       <div>
-        <? loading ? <{ <p>Loading posts...</p> }> : null ?>
-        <? error   ? <{ <p class="err">Failed to load.</p> }> : null ?>
-        <? !loading && posts ? <{
+        <? this.loading ? <{ <p>Loading posts...</p> }> : null ?>
+        <? this.error   ? <{ <p class="err">Failed to load.</p> }> : null ?>
+        <? !this.loading && this.posts ? <{
           <ul>
-            <? posts.map(post => <{ <li key="{{ post.id }}">{{ post.title }}</li> }>) ?>
+            <? this.posts.map(post => <{ <li>{{ post.title }}</li> }>) ?>
           </ul>
         }> : null ?>
       </div>
@@ -789,17 +804,17 @@ const Search = defineComponent({
 
     const search = async () => {
       setLoading(true);
-      const res = await fetch(`/api/search?q=${query.__raw}`);
+      const res = await fetch(`/api/search?q=${query}`);
       setResults(await res.json());
       setLoading(false);
     };
 
     return useTemplate(`
       <div>
-        <input #input="{{ e => setQuery(e.target.value) }}" />
-        <button #click="{{ search }}">Search</button>
-        <? loading ? <{ <p>Searching...</p> }> : null ?>
-        <? results.map(r => <{ <p>{{ r.title }}</p> }>) ?>
+        <input #input="e => setQuery(e.target.value)" />
+        <button #click="search">Search</button>
+        <? this.loading ? <{ <p>Searching...</p> }> : null ?>
+        <? this.results.map(r => <{ <p>{{ r.title }}</p> }>) ?>
       </div>
     `);
   }
@@ -817,7 +832,7 @@ const LiveFeed = defineComponent({
 
     return useTemplate(`
       <div>
-        <? loading ? <{ <span>--</span> }> : <{
+        <? this.loading ? <{ <span>--</span> }> : <{
           <span>{{ feed.count }} new items</span>
         }> ?>
       </div>
@@ -902,7 +917,7 @@ import store            from '../store.js';
 
 export function useAuth() {
   const [token, setToken] = LocalStorage('auth-token', null);
-  const isLoggedIn = !!token.__raw;
+  const isLoggedIn = !!token;  // proxy coerces to boolean via valueOf()
 
   const login  = (newToken) => setToken(newToken);
   const logout = ()         => setToken(null);
@@ -935,9 +950,9 @@ const Profile = defineComponent({
 
     return useTemplate(`
       <section class="profile-page">
-        <? loading ? <{ <div class="spinner"></div> }> : null ?>
-        <? error   ? <{ <p>Error loading profile.</p> }> : null ?>
-        <? data    ? <{ <h1>{{ data.name }}</h1> }> : null ?>
+        <? this.loading ? <{ <div class="spinner"></div> }> : null ?>
+        <? this.error   ? <{ <p>Error loading profile.</p> }> : null ?>
+        <? this.data    ? <{ <h1>{{ data.name }}</h1> }> : null ?>
       </section>
     `);
   }
@@ -954,7 +969,7 @@ export default Profile;
 |------|----------|
 | Reactive value | `const [x, setX] = State(initial)` |
 | Boolean toggle | `const [open, toggle] = Toggle(false)` |
-| Read raw value | `x.__raw` |
+| Read exact primitive | `x.__raw` (rarely needed — proxy handles coercion) |
 | Side effect on mount | `Effect(() => { ... }, [])` |
 | Side effect on change | `Effect(() => { ... }, [dep1, dep2])` |
 | Computed value | `const x = Memo(() => compute(), [deps])` |

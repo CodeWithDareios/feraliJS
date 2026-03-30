@@ -58,7 +58,7 @@ const App = defineComponent({
       <div>
         <h1>Hello from FeraliJs!</h1>
         <p>Count: {{ count }}</p>
-        <button #click="{{ setCount }}">+1</button>
+        <button #click="() => setCount(count + 1)">+1</button>
       </div>
     `);
   }
@@ -104,11 +104,11 @@ createApp('root').use(router).mount(App);
 
 | Syntax | Description |
 |--------|-------------|
-| `{{ expression }}` | Text interpolation — renders any JS expression as text. |
-| `#eventName="handler"` | Event binding — attaches a DOM event listener. |
+| `{{ expression }}` | Text interpolation — renders any JS expression as text. Use in HTML content and inside `<{ }>`. |
+| `#eventName="handler"` | Event binding — write the function name or inline arrow directly, **no `{{ }}` wrapper**. |
 | `@ComponentName({})` | Embeds a child Ferali component. |
-| `<? JS expression ?>` | JavaScript block — renders the result of any JS expression. |
-| `<{ <html/> }>` | HTML-in-JS block — embeds HTML markup inside a `<? ?>` block. |
+| `<? this.variable ?>` | JavaScript block — access render() variables via `this`. Pure JS expressions are fine as-is. |
+| `<{ <html/> }>` | HTML-in-JS block — embeds HTML inside a `<? ?>` block. `{{ }}` works inside here. |
 
 ---
 

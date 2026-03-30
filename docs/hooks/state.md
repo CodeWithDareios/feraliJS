@@ -29,20 +29,31 @@ A **tuple** of:
 
 ## State Proxies
 
-The reactive value returned by `State` is a **JavaScript Proxy**, not the raw value itself. This design allows Ferali's template compiler to access nested properties naturally (e.g., `user.name`) without losing the connection to the live component.
-
-### Accessing the Raw Value
-
-When you need the actual primitive value (e.g., to compute `count + 1`), use the special `__raw` property:
+The reactive value returned by `State` is a **JavaScript Proxy**. For most purposes you can use the value directly — the proxy handles coercion automatically when used in arithmetic, string concatenation, template interpolation, and property access:
 
 ```js
 const [count, setCount] = State(0);
 
-// In a handler — reading the raw value:
-const increment = () => setCount(count.__raw + 1);
+// All of these work without .__raw:
+const doubled  = count * 2;         // valueOf() is called
+const label    = 'Count: ' + count; // toString() is called
+const isEven   = count % 2 === 0;   // valueOf() is called
+setCount(count + 1);                // value incremented correctly
+```
 
-// In a template — the proxy handles toString automatically:
-// {{ count }}  →  calls count.toString()  →  returns the current number
+### The `.__raw` Property
+
+The `.__raw` property gives you the exact underlying primitive. It is only needed in specific cases:
+
+```js
+// Strict equality check (=== compares object identity, not value)
+if (count.__raw === 0) showEmptyState();
+
+// JSON serialization
+const json = JSON.stringify({ count: count.__raw });
+
+// Object spreading (proxy has no own enumerable properties)
+const updated = { ...user.__raw, name: 'Alice' };
 ```
 
 ### The `__raw` Pattern in Toggle
@@ -66,15 +77,15 @@ const Counter = defineComponent({
     const [count, setCount] = State(0);
     const [name,  setName]  = State('World');
 
-    const increment = () => setCount(count.__raw + 1);
+    const increment = () => setCount(count + 1);  // proxy valueOf() handles this
     const reset     = () => setCount(0);
 
     return useTemplate(`
       <div>
         <h1>Hello, {{ name }}!</h1>
         <p>Count: {{ count }}</p>
-        <button #click="{{ increment }}">+</button>
-        <button #click="{{ reset }}">Reset</button>
+        <button #click="increment">+</button>
+        <button #click="reset">Reset</button>
       </div>
     `);
   }
@@ -89,11 +100,10 @@ const Counter = defineComponent({
 - **Equality check:** The setter only triggers a re-render if `newValue !== currentValue` (strict identity check). Mutating an object in place will **not** trigger a re-render — always pass a new value:
   ```js
   // Wrong — mutates in place, no re-render
-  items.__raw.push('new item');
-  setItems(items);
+  items.push('new item'); // Even through proxy, mutation doesn't trigger update
 
   // Correct — creates a new array
-  setItems([...items.__raw, 'new item']);
+  setItems([...items, 'new item']);
   ```
 
 - **Proxy identity:** The proxy object itself never changes between renders, making it safe to pass to effects as a dependency.

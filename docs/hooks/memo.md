@@ -41,9 +41,11 @@ const filtered = Memo(
   [items, filter]
 );
 
+const inputUpdate = e => setFilter(e.target.value);
+
 return useTemplate(`
   <div>
-    <input #input="{{ e => setFilter(e.target.value) }}" />
+    <input #input="inputUpdate" />
     <p>Filtered count: {{ filtered }}</p>
   </div>
 `);
