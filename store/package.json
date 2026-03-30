@@ -1,0 +1,9 @@
+{
+    "name": "ferali-store",
+    "version": "0.0.1",
+    "main": "store.js",
+    "type": "module",
+    "exports": {
+        ".": "./store.js"
+    }
+}
