@@ -6,7 +6,7 @@
 
 import { COMPONENT } from '../node/identity.js';
 import { randomString, miniHash, cloneObject } from '../utils/utils.js';
-import { currentComponent as CURRENT_COMPONENT, STORAGE } from '../hooks/storage.js';
+import { currentComponent as CURRENT_COMPONENT, STORAGE, COMPONENT_STACK } from '../hooks/storage.js';
 import { BUILD_DOM } from '../vdom/fullBuild.js';
 import { UPDATE_DOM } from '../vdom/update.js';
 import { DESTROY_DOM } from '../vdom/destroy.js';
@@ -30,14 +30,38 @@ const STYLESHEET_REGISTRY = new Map();
  * Handles the full lifecycle from build to destruction.
  */
 export default class Component {
-  #lifeCycle = {};
+  #lifeCycle = {
+    onInit: [],
+    onMounted: [],
+    onUpdate: [],
+    onDestroy: []
+  };
 
   /**
-   * @param {{ render: Function, style?: { path: string } }} config - The component configuration.
+   * @param {{ render: Function, style?: { path: string }, onInit?: Function, onMounted?: Function, onUpdate?: Function, onDestroy?: Function }} config - The component configuration.
    */
   constructor(config) {
     this.render = config.render;
     this.instanceID = null;
+
+    if (config.onInit) this.#lifeCycle.onInit.push(config.onInit);
+    if (config.onMounted) this.#lifeCycle.onMounted.push(config.onMounted);
+    if (config.onUpdate) this.#lifeCycle.onUpdate.push(config.onUpdate);
+    if (config.onDestroy) this.#lifeCycle.onDestroy.push(config.onDestroy);
+
+    /** Allows hooks to connect callbacks to lifecycle events dynamically. */
+    this.addLifeCycleHook = (event, callback) => {
+      if (this.#lifeCycle[event]) {
+        this.#lifeCycle[event].push(callback);
+      }
+    };
+
+    /** Executes all callbacks registered to a specific lifecycle event. */
+    this.runLifeCycle = (event) => {
+      if (this.#lifeCycle[event]) {
+        this.#lifeCycle[event].forEach(cb => cb.call(this));
+      }
+    };
 
     // Normalize style configuration
     if (typeof config.style === 'string') {
@@ -92,10 +116,13 @@ export default class Component {
    */
   async build() {
     if (this.getCurrentDOM() !== null) return;
+    
+    this.runLifeCycle('onInit');
 
     const START = performance.now();
     this.instanceID = randomSelector();
     CURRENT_COMPONENT.component = this;
+    COMPONENT_STACK.push(this);
 
     const config = this.getConfig();
     const cid = this.INFO().__componentID;
@@ -137,13 +164,21 @@ export default class Component {
     const computedDOM = await BUILD_DOM(this.accessBluePrint(), this.getProps());
     this.setNewDOM(computedDOM);
 
+    this.runLifeCycle('onMounted');
+
     if (ISDEV) devInfo['build-process'].buildTime = performance.now() - devInfo['build-process'].startTime;
     CURRENT_COMPONENT.component = null;
+    COMPONENT_STACK.pop();
   }
 
   /** @returns {Readonly<Object>} Lifecycle metadata. */
   get lifeCycleInfo() {
-    return Object.freeze({ ...this.#lifeCycle });
+    return Object.freeze({
+      onInit: [...this.#lifeCycle.onInit],
+      onMounted: [...this.#lifeCycle.onMounted],
+      onUpdate: [...this.#lifeCycle.onUpdate],
+      onDestroy: [...this.#lifeCycle.onDestroy],
+    });
   }
 
   /**
@@ -157,6 +192,7 @@ export default class Component {
 
       // Set context for hooks and hyperscript scoping
       CURRENT_COMPONENT.component = this;
+      COMPONENT_STACK.push(this);
       if (STORAGE.STATE.has(this.instanceID)) {
         STORAGE.STATE.get(this.instanceID).hookIndex = 0;
       }
@@ -169,9 +205,12 @@ export default class Component {
 
       // Clear context after render
       CURRENT_COMPONENT.component = null;
+      COMPONENT_STACK.pop();
 
       await UPDATE_DOM(this.getCurrentDOM(), newVdom, this.getCurrentDOM().ell.parentNode);
       this.setNewDOM(newVdom);
+      
+      this.runLifeCycle('onUpdate');
       this.isUpdating = false;
     }
   }
@@ -184,6 +223,8 @@ export default class Component {
   async destroy() {
     if (this.getCurrentDOM() === null || this.isDestroyed) return;
     this.isDestroyed = true;
+
+    this.runLifeCycle('onDestroy');
 
     const config = this.getConfig();
     const cid = this.INFO().__componentID;
@@ -212,6 +253,7 @@ export default class Component {
     if (this.instanceID) {
       STORAGE.STATE.delete(this.instanceID);
       STORAGE.EFFECT.delete(this.instanceID);
+      STORAGE.REF.delete(this.instanceID);
     }
   }
 }

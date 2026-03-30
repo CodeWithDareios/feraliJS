@@ -12,6 +12,8 @@
 export const STORAGE = {
   STATE: new Map(),
   EFFECT: new Map(),
+  REF: new Map(),
+  CONTEXT: new WeakMap()
 };
 
 /**
@@ -24,3 +26,10 @@ export const STORAGE = {
 export let currentComponent = {
   component: null,
 };
+
+/**
+ * A stack tracking the hierarchy of components currently being built/updated.
+ * Used exclusively by the `Provide` and `Inject` hooks to route data downward.
+ * @type {Array<import('../component/component.js').default>}
+ */
+export const COMPONENT_STACK = [];

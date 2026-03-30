@@ -4,6 +4,7 @@
  * Nested outlets (depth 1+) render child routes inside parent route layouts.
  */
 
+import { defineComponent } from 'ferali';
 import { RouterState } from '../core/state.js';
 
 class RouterOutlet extends HTMLElement {
@@ -60,7 +61,9 @@ class RouterOutlet extends HTMLElement {
         await this.#currentComponent.destroy();
       }
 
-      this.#currentComponent = ComponentDef;
+      // IMPORT FIX: Ferali routed components are ES modules that export an instantiated Component singleton.
+      // We MUST create a fresh instance using defineComponent to ensure fresh state IDs and build cycles!
+      this.#currentComponent = defineComponent(ComponentDef.getConfig());
       this.#currentComponent.useProps(currentParams);
 
       if (this.#currentComponent.getCurrentDOM()) {

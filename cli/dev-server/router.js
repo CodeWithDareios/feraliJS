@@ -3,14 +3,17 @@ import path from 'path';
 import { getContentType, safeJoinPath } from './utils.js';
 import { handleSSE } from './watcher.js';
 import { error, warn, success } from './logger.js';
+import { transformJSFile } from './transformer.js';
 
 const INJECTED_SCRIPTS = `
 <script type="importmap">
 {
   "imports": {
     "ferali": "/@ferali/core.js",
+    "ferali/": "/@ferali/",
     "ferali/hooks": "/@ferali/hooks/hooks.js",
-    "ferali-router": "/@ferali-router/router.js"
+    "ferali-router": "/@ferali-router/router.js",
+    "ferali-store": "/@ferali-store/store.js"
   }
 }
 </script>
@@ -53,6 +56,25 @@ export function handleRequest(req, res, rootDir) {
         const coreDir = path.join(rootDir, 'lib', 'router');
         const safePath = safeJoinPath(coreDir, '/' + coreRelativePath);
 
+        if (!safePath) return serve404(res);
+        return serveFile(req, res, safePath);
+    }
+
+    if (url.startsWith('/@ferali-store/')) {
+        const coreRelativePath = url.replace(/^\/@ferali-store\//, '');
+        const coreDir = path.join(rootDir, 'lib', 'store');
+        const safePath = safeJoinPath(coreDir, '/' + coreRelativePath);
+
+        if (!safePath) return serve404(res);
+        return serveFile(req, res, safePath);
+    }
+
+    // Safely allow cross-workspace relative imports (e.g. `../core/hooks/storage`) 
+    // to map natively back to the physical disk!
+    if (url.startsWith('/core/')) {
+        const coreDir = path.join(rootDir, 'lib', 'core');
+        const safePath = safeJoinPath(coreDir, url.replace(/^\/core\//, '/'));
+        
         if (!safePath) return serve404(res);
         return serveFile(req, res, safePath);
     }
@@ -118,7 +140,7 @@ function serveFile(req, res, filePath) {
     const feraliCid = url.searchParams.get('ferali-cid');
 
     // Read as buffer to support images/binary files
-    fs.readFile(filePath, (err, data) => {
+    fs.readFile(filePath, async (err, data) => {
         if (err) {
             if (err.code === 'ENOENT') {
                 return serve404(res);
@@ -129,12 +151,25 @@ function serveFile(req, res, filePath) {
         }
 
         const mimeType = getContentType(filePath);
-        
+
         // Only transform if it's a CSS file AND localization is requested
         if (isLocalized && feraliCid && filePath.endsWith('.css')) {
             const transformed = transformScopedCss(data.toString('utf8'), feraliCid);
             res.writeHead(200, { 'Content-Type': mimeType });
             return res.end(transformed);
+        }
+
+        // Apply magic template transformation for JS files in the src folder
+        if (url.pathname.startsWith('/src/') && filePath.endsWith('.js')) {
+            try {
+                const transformed = await transformJSFile(data.toString('utf8'), filePath);
+                res.writeHead(200, { 'Content-Type': mimeType });
+                return res.end(transformed);
+            } catch (transformErr) {
+                error(`Transformation error on ${filePath}: ${transformErr.message}`);
+                res.writeHead(500);
+                return res.end('500 Internal Server Error (Transformer)');
+            }
         }
 
         res.writeHead(200, { 'Content-Type': mimeType });
@@ -150,14 +185,17 @@ function serveFile(req, res, filePath) {
 function transformScopedCss(css, id) {
     // Regex: find sequences that don't contain delimiters, preceded by a delimiter or start, and followed by {
     return css.replace(/(?<=^|[}{;])([^}{;]+)(?={)/g, (match) => {
-        if (match.trim().startsWith('@')) return match;
-        
         const scoped = match.split(',')
             .map(s => {
                 const trimmed = s.trim();
                 const leadingWhitespace = s.match(/^\s*/)[0];
                 if (!trimmed) return s;
-                
+
+                // SKIP: Do not prefix @-rules or keyframe percentages (e.g., 50%) or from/to
+                if (trimmed.startsWith('@') || /^(\d+(\.\d+)?%|from|to)$/.test(trimmed)) {
+                    return s;
+                }
+
                 // If :host is present, replace it with the specific ID selector
                 // Otherwise, prefix to ensure nesting/descendant scoping
                 if (trimmed.includes(':host')) {
@@ -167,7 +205,7 @@ function transformScopedCss(css, id) {
                 return `${leadingWhitespace}[ferali-cid="${id}"] ${trimmed}`;
             })
             .join(',');
-        
+
         return scoped;
     });
 }

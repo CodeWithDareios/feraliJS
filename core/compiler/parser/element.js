@@ -29,7 +29,6 @@ export function parseElement(scanner, outerStopTokens = []) {
     // Only consume the closing tag if we actually stopped for it
     if (scanner.peek(stopToken.length) === stopToken) {
        scanner.consumeUntil('>'); 
-       scanner.consume(1); // the '>'
     }
   }
 

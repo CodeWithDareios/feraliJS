@@ -10,20 +10,6 @@ import { compareObjects } from '../utils/utils.js';
 import { compile as COMPILE } from '../compiler/compiler.js';
 
 /**
- * Compiles an HTML template string and returns a blueprint function that
- * Ferali's rendering engine can call to produce a live VNode tree.
- *
- * @param {string} templateString - A valid Ferali template string (supports `{{ }}` interpolation, `@Component` syntax, and `<? ?>` JS blocks).
- * @param {Object} contextObject - A map of named values and component classes available inside the template.
- * @returns {(props?: Object) => import('../node/vnode.js').VNode} A blueprint function.
- *
- * @example
- * return useTemplate(`
- *   <h1>Hello {{ name }}</h1>
- *   @Button({})
- * `, { name: 'World', Button });
- */
-/**
  * Extracts all property and method names from an object, including those
  * inherited from prototypes (e.g. class methods).
  * @param {Object} obj
@@ -41,7 +27,24 @@ const getAllKeys = (obj) => {
   return Array.from(keys);
 };
 
-export function useTemplate(templateString, contextObject) {
+/**
+ * Compiles an HTML template string and returns a blueprint function that
+ * Ferali's rendering engine can call to produce a live VNode tree.
+ *
+ * @param {string} templateString - A valid Ferali template string OR a relative path to a .html file (e.g. './template.html').
+ * @returns {(props?: Object) => import('../node/vnode.js').VNode} A blueprint function.
+ *
+ * @example
+ * return useTemplate(`
+ *   <h1>Hello {{ name }}</h1>
+ *   @Button({})
+ * `);
+ */
+export function useTemplate(templateString) {
+  // HIDDEN MAGIC: The Dev Server automatically injects the second parameter.
+  // We use `arguments[1]` so that standard IDE Intellisense never confuses 
+  // the developer by asking them to provide it themselves!
+  const contextObject = arguments[1] || {};
   const keys = getAllKeys(contextObject);
   const result = COMPILE(templateString, keys);
 

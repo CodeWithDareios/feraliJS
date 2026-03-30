@@ -82,7 +82,7 @@ export function createApp(rootID) {
     },
 
     /** @deprecated Dev mode is temporarily disabled while a better implementation is built. */
-    enableDevMode() {},
+    enableDevMode() { },
   };
 
   return app;

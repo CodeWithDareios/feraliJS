@@ -45,10 +45,12 @@ export function State(initialValue) {
         ) {
           return () => storage.data[currentIndex];
         }
+        const rawVal = storage.data[currentIndex];
+        
         if (prop === '__isState') return true;
-        if (prop === '__raw') return storage.data[currentIndex];
+        if (prop === '__raw') return rawVal;
 
-        return storage.data[currentIndex][prop];
+        return rawVal === null || rawVal === undefined ? undefined : rawVal[prop];
       },
     }
   );
