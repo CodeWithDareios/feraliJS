@@ -105,7 +105,7 @@ createApp('root').use(router).mount(App);
 | Syntax | Description |
 |--------|-------------|
 | `{{ expression }}` | Text interpolation — renders any JS expression as text. |
-| `#eventName="{{ handler }}"` | Event binding — attaches a DOM event listener. |
+| `#eventName="handler"` | Event binding — attaches a DOM event listener. |
 | `@ComponentName({})` | Embeds a child Ferali component. |
 | `<? JS expression ?>` | JavaScript block — renders the result of any JS expression. |
 | `<{ <html/> }>` | HTML-in-JS block — embeds HTML markup inside a `<? ?>` block. |
